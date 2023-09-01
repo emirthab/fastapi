@@ -247,9 +247,8 @@ def test_encode_model_with_pure_path():
             class Config:
                 arbitrary_types_allowed = True
 
-    test_path = PurePath("/foo", "bar")
-    obj = ModelWithPath(path=test_path)
-    assert jsonable_encoder(obj) == {"path": str(test_path)}
+    obj = ModelWithPath(path=PurePath("/foo", "bar"))
+    assert jsonable_encoder(obj) == {"path": "/foo/bar"}
 
 
 def test_encode_model_with_pure_posix_path():

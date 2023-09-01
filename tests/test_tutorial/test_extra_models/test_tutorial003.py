@@ -1,4 +1,3 @@
-from dirty_equals import IsOneOf
 from fastapi.testclient import TestClient
 
 from docs_src.extra_models.tutorial003 import app
@@ -77,11 +76,7 @@ def test_openapi_schema():
             "schemas": {
                 "PlaneItem": {
                     "title": "PlaneItem",
-                    "required": IsOneOf(
-                        ["description", "type", "size"],
-                        # TODO: remove when deprecating Pydantic v1
-                        ["description", "size"],
-                    ),
+                    "required": ["description", "size"],
                     "type": "object",
                     "properties": {
                         "description": {"title": "Description", "type": "string"},
@@ -91,11 +86,7 @@ def test_openapi_schema():
                 },
                 "CarItem": {
                     "title": "CarItem",
-                    "required": IsOneOf(
-                        ["description", "type"],
-                        # TODO: remove when deprecating Pydantic v1
-                        ["description"],
-                    ),
+                    "required": ["description"],
                     "type": "object",
                     "properties": {
                         "description": {"title": "Description", "type": "string"},
