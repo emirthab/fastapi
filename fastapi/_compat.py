@@ -43,13 +43,6 @@ sequence_annotation_to_type = {
 
 sequence_types = tuple(sequence_annotation_to_type.keys())
 
-mapping_annotation_to_type = {
-    Mapping: list,
-}
-
-mapping_types = tuple(mapping_annotation_to_type.keys())
-
-
 if PYDANTIC_V2:
     from pydantic import PydanticSchemaGenerationError as PydanticSchemaGenerationError
     from pydantic import TypeAdapter
@@ -63,7 +56,6 @@ if PYDANTIC_V2:
     from pydantic.json_schema import GenerateJsonSchema as GenerateJsonSchema
     from pydantic.json_schema import JsonSchemaValue as JsonSchemaValue
     from pydantic_core import CoreSchema as CoreSchema
-    from pydantic_core import MultiHostUrl as MultiHostUrl
     from pydantic_core import PydanticUndefined, PydanticUndefinedType
     from pydantic_core import Url as Url
     from pydantic_core.core_schema import (
@@ -189,9 +181,13 @@ if PYDANTIC_V2:
         field_mapping: Dict[
             Tuple[ModelField, Literal["validation", "serialization"]], JsonSchemaValue
         ],
+        separate_input_output_schemas: bool = True,
     ) -> Dict[str, Any]:
+        override_mode: Union[Literal["validation"], None] = (
+            None if separate_input_output_schemas else "validation"
+        )
         # This expects that GenerateJsonSchema was already used to generate the definitions
-        json_schema = field_mapping[(field, field.mode)]
+        json_schema = field_mapping[(field, override_mode or field.mode)]
         if "$ref" not in json_schema:
             # TODO remove when deprecating Pydantic v1
             # Ref: https://github.com/pydantic/pydantic/blob/d61792cc42c80b13b23e3ffa74bc37ec7c77f7d1/pydantic/schema.py#L207
@@ -208,14 +204,19 @@ if PYDANTIC_V2:
         fields: List[ModelField],
         schema_generator: GenerateJsonSchema,
         model_name_map: ModelNameMap,
+        separate_input_output_schemas: bool = True,
     ) -> Tuple[
         Dict[
             Tuple[ModelField, Literal["validation", "serialization"]], JsonSchemaValue
         ],
         Dict[str, Dict[str, Any]],
     ]:
+        override_mode: Union[Literal["validation"], None] = (
+            None if separate_input_output_schemas else "validation"
+        )
         inputs = [
-            (field, field.mode, field._type_adapter.core_schema) for field in fields
+            (field, override_mode or field.mode, field._type_adapter.core_schema)
+            for field in fields
         ]
         field_mapping, definitions = schema_generator.generate_definitions(
             inputs=inputs
@@ -234,12 +235,6 @@ if PYDANTIC_V2:
 
     def is_scalar_sequence_field(field: ModelField) -> bool:
         return field_annotation_is_scalar_sequence(field.field_info.annotation)
-
-    def is_scalar_sequence_mapping_field(field: ModelField) -> bool:
-        return field_annotation_is_scalar_sequence_mapping(field.field_info.annotation)
-
-    def is_scalar_mapping_field(field: ModelField) -> bool:
-        return field_annotation_is_scalar_mapping(field.field_info.annotation)
 
     def is_bytes_field(field: ModelField) -> bool:
         return is_bytes_or_nonable_bytes_annotation(field.type_)
@@ -288,7 +283,6 @@ else:
     from pydantic.fields import (  # type: ignore[attr-defined]
         SHAPE_FROZENSET,
         SHAPE_LIST,
-        SHAPE_MAPPING,
         SHAPE_SEQUENCE,
         SHAPE_SET,
         SHAPE_SINGLETON,
@@ -307,9 +301,6 @@ else:
     )
     from pydantic.fields import (  # type: ignore[no-redef, attr-defined]
         UndefinedType as UndefinedType,  # noqa: F401
-    )
-    from pydantic.networks import (  # type: ignore[no-redef]
-        MultiHostDsn as MultiHostUrl,  # noqa: F401
     )
     from pydantic.schema import (
         field_schema,
@@ -339,7 +330,6 @@ else:
         SHAPE_SEQUENCE,
         SHAPE_TUPLE_ELLIPSIS,
     }
-
     sequence_shape_to_type = {
         SHAPE_LIST: list,
         SHAPE_SET: set,
@@ -347,11 +337,6 @@ else:
         SHAPE_SEQUENCE: list,
         SHAPE_TUPLE_ELLIPSIS: list,
     }
-
-    mapping_shapes = {
-        SHAPE_MAPPING,
-    }
-    mapping_shapes_to_type = {SHAPE_MAPPING: Mapping}
 
     @dataclass
     class GenerateJsonSchema:  # type: ignore[no-redef]
@@ -420,28 +405,6 @@ else:
             return True
         return False
 
-    def is_pv1_scalar_mapping_field(field: ModelField) -> bool:
-        if (field.shape in mapping_shapes) and not lenient_issubclass(  # type: ignore[attr-defined]
-            field.type_, BaseModel
-        ):
-            if field.sub_fields is not None:  # type: ignore[attr-defined]
-                for sub_field in field.sub_fields:  # type: ignore[attr-defined]
-                    if not is_scalar_field(sub_field):
-                        return False
-            return True
-        return False
-
-    def is_pv1_scalar_sequence_mapping_field(field: ModelField) -> bool:
-        if (field.shape in mapping_shapes) and not lenient_issubclass(  # type: ignore[attr-defined]
-            field.type_, BaseModel
-        ):
-            if field.sub_fields is not None:  # type: ignore[attr-defined]
-                for sub_field in field.sub_fields:  # type: ignore[attr-defined]
-                    if not is_scalar_sequence_field(sub_field):
-                        return False
-            return True
-        return False
-
     def _normalize_errors(errors: Sequence[Any]) -> List[Dict[str, Any]]:
         use_errors: List[Any] = []
         for error in errors:
@@ -475,6 +438,7 @@ else:
         field_mapping: Dict[
             Tuple[ModelField, Literal["validation", "serialization"]], JsonSchemaValue
         ],
+        separate_input_output_schemas: bool = True,
     ) -> Dict[str, Any]:
         # This expects that GenerateJsonSchema was already used to generate the definitions
         return field_schema(  # type: ignore[no-any-return]
@@ -490,6 +454,7 @@ else:
         fields: List[ModelField],
         schema_generator: GenerateJsonSchema,
         model_name_map: ModelNameMap,
+        separate_input_output_schemas: bool = True,
     ) -> Tuple[
         Dict[
             Tuple[ModelField, Literal["validation", "serialization"]], JsonSchemaValue
@@ -509,12 +474,6 @@ else:
 
     def is_scalar_sequence_field(field: ModelField) -> bool:
         return is_pv1_scalar_sequence_field(field)
-
-    def is_scalar_sequence_mapping_field(field: ModelField) -> bool:
-        return is_pv1_scalar_sequence_mapping_field(field)
-
-    def is_scalar_mapping_field(field: ModelField) -> bool:
-        return is_pv1_scalar_mapping_field(field)
 
     def is_bytes_field(field: ModelField) -> bool:
         return lenient_issubclass(field.type_, bytes)
@@ -565,27 +524,14 @@ def field_annotation_is_sequence(annotation: Union[Type[Any], None]) -> bool:
     )
 
 
-def _annotation_is_mapping(annotation: Union[Type[Any], None]) -> bool:
-    if lenient_issubclass(annotation, (str, bytes)):
-        return False
-    return lenient_issubclass(annotation, mapping_types)
-
-
-def field_annotation_is_mapping(annotation: Union[Type[Any], None]) -> bool:
-    return _annotation_is_mapping(annotation) or _annotation_is_mapping(
-        get_origin(annotation)
-    )
-
-
 def value_is_sequence(value: Any) -> bool:
     return isinstance(value, sequence_types) and not isinstance(value, (str, bytes))  # type: ignore[arg-type]
 
 
 def _annotation_is_complex(annotation: Union[Type[Any], None]) -> bool:
     return (
-        lenient_issubclass(annotation, (BaseModel, UploadFile))
+        lenient_issubclass(annotation, (BaseModel, Mapping, UploadFile))
         or _annotation_is_sequence(annotation)
-        or _annotation_is_mapping(annotation)
         or is_dataclass(annotation)
     )
 
@@ -616,26 +562,12 @@ def field_annotation_is_scalar_sequence(annotation: Union[Type[Any], None]) -> b
             if field_annotation_is_scalar_sequence(arg):
                 at_least_one_scalar_sequence = True
                 continue
+            elif not field_annotation_is_scalar(arg):
+                return False
         return at_least_one_scalar_sequence
     return field_annotation_is_sequence(annotation) and all(
         field_annotation_is_scalar(sub_annotation)
         for sub_annotation in get_args(annotation)
-    )
-
-
-def field_annotation_is_scalar_mapping(annotation: Union[Type[Any], None]) -> bool:
-    return field_annotation_is_mapping(annotation) and all(
-        field_annotation_is_scalar(sub_annotation)
-        for sub_annotation in get_args(annotation)
-    )
-
-
-def field_annotation_is_scalar_sequence_mapping(
-    annotation: Union[Type[Any], None]
-) -> bool:
-    return field_annotation_is_mapping(annotation) and all(
-        field_annotation_is_scalar_sequence(sub_annotation)
-        for sub_annotation in get_args(annotation)[1:]
     )
 
 
